@@ -26,7 +26,7 @@ SIGNOFF_PASS = "PASS"
 SIGNOFF_FAIL = "FAIL"
 SIGNOFF_MISSING = "MISSING"
 
-_VERDICT_RE = re.compile(r"^\s*Overall Verdict:\s*(PASS|FAIL)\s*$", re.MULTILINE)
+_VERDICT_RE = re.compile(r"^\s*#*\s*Overall Verdict:\s*(PASS|FAIL)\s*$", re.MULTILINE)
 _AUDIT_FILENAME_RE = re.compile(r"^audit-report-(?P<type>.+)-attempt-(?P<n>\d+)\.md$")
 
 

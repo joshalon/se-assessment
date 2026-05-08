@@ -227,3 +227,24 @@ def test_main_entrypoint_dispatches() -> None:
     """The module-level ``main`` is callable and respects argv."""
     rc = submit_mod.main(["--type", "layer-1", "--value", "v", "--dry-run"])
     assert rc == 0
+
+
+def test_markdown_heading_verdict_recognized_as_pass(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A verdict line written as a markdown heading must still gate as PASS."""
+    monkeypatch.chdir(tmp_path)
+    audit_dir = tmp_path / "audit"
+    audit_dir.mkdir()
+    (audit_dir / "audit-report-layer-1-attempt-1.md").write_text(
+        "# Audit\n\nSome text.\n\n## Overall Verdict: PASS\n", encoding="utf-8"
+    )
+    calls = _patch_http(monkeypatch)
+    monkeypatch.setattr("sys.stdin", io.StringIO("n\n"))
+
+    rc = submit_mod.main(["--type", "layer-1", "--value", "v"])
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "audit signoff: PASS" in out
+    assert calls["count"] == 0
