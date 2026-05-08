@@ -1,0 +1,33 @@
+# Environment
+.env
+
+# Runtime
+logs/
+
+# Orchestrator session metadata, agent prompts, scratch reports
+# (Deliverable audit reports under discovery/ and assessment/, plus PHASE_1_HANDOFF.md, are intentionally tracked.)
+.claude/
+tasks/
+.orchestrator/
+agents/
+orchestrator-prompt*.md
+agent-prompt*.md
+*.agent-prompt.md
+*.orchestrator.md
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Virtual envs (any prefix/suffix variant)
+.venv*/
+venv*/
+env/
+ENV/
