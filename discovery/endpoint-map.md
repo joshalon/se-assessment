@@ -189,10 +189,78 @@ Notably absent / observations:
 
 The `allow:` header is only emitted by the application's auth-gated handlers (it appears on 401s for `/submit` GET, `/submit` OPTIONS, and `/challenges` GET). Its presence further confirms which paths are real.
 
+## Speculative Probes (Phase 2A — unauthenticated, pre-clock)
+
+Probed Fri May  8 02:16:31–34 UTC 2026. No `Authorization` header sent; `request_headers: {}` confirmed in all five log files.
+
+### `GET /api/v1/window`
+- Status: 404
+- Body: empty (CORS-headers envelope only)
+- Result: not registered
+
+### `GET /api/v1/budget`
+- Status: 404
+- Body: empty
+- Result: not registered
+
+### `GET /api/v1/quota`
+- Status: 404
+- Body: empty
+- Result: not registered
+
+### `GET /api/v1/expires`
+- Status: 404
+- Body: empty
+- Result: not registered
+
+### `GET /api/v1/deadline`
+- Status: 404
+- Body: empty
+- Result: not registered
+
+All five return the same 404 envelope (CORS headers, no security bundle, empty body) as the Phase 1 confirmed non-routes. None is a registered route; the time-remaining mechanism is not exposed via a dedicated path. Confirmed via `/api/v1/stats` in Phase 2B (see dataset-response-analysis.md).
+
+---
+
+## Phase 2B — Authenticated Routes Discovered
+
+These routes were unknown until the first authenticated call started the clock.
+
+### `GET /api/v1/dataset` (authenticated — Phase 2B primary call)
+- Status: 200
+- T0: 2026-05-08T02:16:44Z (log file: `logs/20260508T021644Z-GET-api-v1-dataset.json`)
+- Body: paginated JSON envelope — `data` (array of 25 base64 strings), `has_more: true`, `page: 1`, `page_size: 25`, `total: 500`
+- Notable headers:
+  - `link: </api/v1/dataset?batch=true&range=0-99>; rel="batch", </api/v1/stats>; rel="related"` — reveals batch mode and `/stats` route
+  - `ratelimit-limit: 5`, `ratelimit-remaining: 4`, `ratelimit-reset: 1`
+  - `etag: W/"bf08cec00442d0e42e4dd6bca29e68649ec1d75f19c72bfeb64a73dc585b47cf"` (64-char hex, SHA-256 width)
+  - `cache-control: private, max-age=60, stale-while-revalidate=60`
+  - Full security-header bundle
+- See `discovery/dataset-response-analysis.md` for full header and body catalog.
+
+### `GET /api/v1/stats` (authenticated — Phase 2D follow-up call)
+- Status: 200
+- Log file: `logs/20260508T021837Z-GET-api-v1-stats.json`
+- Discovered via: `link: rel="related"` header on `/dataset` response
+- Body: live assessment timer — `api_requests`, `assessment_expires_at`, `assessment_started_at`, `dataset_records`, `elapsed_seconds`, `remaining_seconds`
+- Notable headers: full security-header bundle; no `ratelimit-*`, no `link`, no `etag`, no `cache-control`
+- Note: `api_requests` counter increments on dataset fetches only; stats calls are not counted.
+
+### `GET /api/v1/dataset?batch=true&range=0-99` (not yet called)
+- Discovered via: `link: rel="batch"` header on `/dataset` response
+- Expected: 100 records per call; 5 calls required for full 500-record dataset
+- Status: unknown (not yet probed — Phase 3 action)
+
+---
+
 ## Known Unknowns (post-clock discovery items)
 
-- **Decryption key location:** No `/key`, `/keys`, `/decrypt` route exists. Hypotheses: (1) the key is delivered inline in the authenticated `/dataset` or `/dataset/{id}` payload; (2) the key is delivered as part of the `/challenges` POST response; (3) a custom response header (e.g., `x-decryption-key` or similar) is attached on authenticated responses. Worth re-checking response headers on the first authenticated probe for unusual `x-*` keys.
-- **Time-remaining mechanism:** `/time-remaining`, `/timer`, `/clock` all 404. Most likely: a custom response header (e.g., `x-time-remaining`, `x-deadline`, `x-clock-started-at`) is attached to authenticated responses once the clock has started. Less likely: the server returns the deadline as a field in the body of `/dataset` or a `/challenges` response. The first authenticated request should be inspected with `-i` for any non-standard `x-*` headers.
-- **Dataset structure (paginated vs indexed vs single):** Both `/dataset` and `/dataset/{id}` return 401. Three plausible shapes: (a) `/dataset` returns a list/manifest with item IDs, and `/dataset/{id}` fetches each item; (b) `/dataset` returns the full payload and `/dataset/{id}` is an alternate per-item lookup; (c) `/dataset` returns metadata (count, schema), and items are addressed via `/dataset/{id}`. The collection-vs-item duality is the primary thing to disambiguate on the first authenticated GET.
-- **Submission response shape:** `POST /submit` was not probed (would require auth and would consume a real submission). Unknown whether `/submit` returns immediate scoring, a job/correlation ID, or just an ack. The `allow: POST` confirms POST is the intended verb but tells us nothing about the response body. Plan to do a dry-run / minimal-payload submission only after the dataset and challenge structure are understood.
-- **`/challenges` verb:** Possibly POST-only based on the `allow: OPTIONS` anomaly on a GET probe — needs verification post-clock with an authenticated OPTIONS or by trying POST.
+Updated after Phase 2B/2C/2D. Items resolved in Phase 2 are marked.
+
+- **Decryption key location:** UNRESOLVED. The `/dataset` response body contains no key material and no `x-*` key header was observed. Most likely delivered via POST `/api/v1/challenges`. See Hypothesis 2 in `discovery/dataset-response-analysis.md`.
+- **Time-remaining mechanism:** RESOLVED (Phase 2D). Exposed via `/api/v1/stats` body fields `elapsed_seconds`, `remaining_seconds`, `assessment_started_at`, `assessment_expires_at`. No per-response `x-*` timing header observed.
+- **Dataset structure (paginated vs indexed vs single):** RESOLVED (Phase 2B). `/dataset` returns a paginated envelope: 25 items per default page, 500 total records, `has_more: true` on page 1. A batch mode (`?batch=true&range=0-99`) is advertised via the `link` header for 100-item fetches. Records are positionally addressed (bare base64 strings in an array — no per-record ID field).
+- **Submission response shape:** UNRESOLVED. `POST /submit` not yet probed. Unknown response format.
+- **`/challenges` verb:** UNRESOLVED. Still inferred as POST-only from Phase 1 `allow: OPTIONS` anomaly. Not probed in Phase 2.
+- **ETag integrity proof input:** UNRESOLVED. The 64-char hex ETag is present; its hash input (raw bytes, JSON, decoded records) is unknown. Phase 3 should verify.
+- **Batch range semantics:** UNRESOLVED. Whether `range=0-99` is inclusive or exclusive at both ends needs empirical confirmation in Phase 3.
