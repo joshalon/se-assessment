@@ -1,4 +1,4 @@
-"""HTTP client for the Meridian SE Assessment API.
+"""HTTP client for the SE Assessment API.
 
 Provides :func:`make_request`, a thin wrapper around ``httpx`` that:
 

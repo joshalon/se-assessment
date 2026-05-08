@@ -1,6 +1,6 @@
 # `assessment` package
 
-HTTP client and submission CLI for the Meridian SE Assessment.
+HTTP client and submission CLI for the SE Assessment.
 
 ## Installation
 

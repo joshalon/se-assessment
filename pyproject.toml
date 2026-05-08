@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "assessment"
 version = "0.1.0"
-description = "Meridian SE Assessment client and submission CLI (Phase 1 scaffolding)."
+description = "SE Assessment client and submission CLI (Phase 1 scaffolding)."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

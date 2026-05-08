@@ -1,4 +1,4 @@
-"""Submission CLI for the Meridian SE Assessment.
+"""Submission CLI for the SE Assessment.
 
 Usage::
 
@@ -104,7 +104,7 @@ def _build_parser() -> argparse.ArgumentParser:
     """Construct the argparse parser for the submission CLI."""
     parser = argparse.ArgumentParser(
         prog="assessment.submit",
-        description="Submit a value for the Meridian SE Assessment after audit signoff.",
+        description="Submit a value for the SE Assessment after audit signoff.",
     )
     parser.add_argument("--type", dest="layer_type", required=True, help="Layer/answer type.")
     parser.add_argument("--value", dest="value", required=True, help="Value to submit.")

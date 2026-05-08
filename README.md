@@ -1,6 +1,6 @@
-# Meridian SE Assessment
+# SE Assessment
 
-Phase 1 scaffolding for the Meridian SE Assessment.
+Phase 1 scaffolding for the SE Assessment.
 
 This repository hosts the HTTP client and submission CLI used to interact
 with the assessment API, along with the discovery notes and audit trail

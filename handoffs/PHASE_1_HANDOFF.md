@@ -1,4 +1,4 @@
-# Phase 1 Handoff — Meridian SE Assessment
+# Phase 1 Handoff — SE Assessment
 
 > Synthesized: 2026-05-08 (Fri 00:59 UTC) / 2026-05-07 evening ET
 > Phase: 1 (pre-clock)
