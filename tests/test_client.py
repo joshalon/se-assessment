@@ -313,3 +313,21 @@ def test_logs_directory_is_created(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
     assert (tmp_path / "logs").is_dir()
     assert os.listdir(tmp_path / "logs"), "expected a log file in logs/"
+
+
+def test_rapid_calls_yield_distinct_log_filenames(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Five wrapper calls in rapid succession produce five distinct log files."""
+    monkeypatch.setenv("BASE_URL", "https://example.invalid")
+    monkeypatch.delenv("API_KEY", raising=False)
+
+    _install_mock_transport(monkeypatch, _ok_handler({"ok": True}))
+
+    for _ in range(5):
+        client_mod.make_request("GET", "/api/v1/test")
+
+    logs_dir = tmp_path / "logs"
+    assert logs_dir.is_dir()
+    files = list(logs_dir.iterdir())
+    assert len(files) == 5, f"expected 5 distinct log files, got {len(files)}: {[f.name for f in files]}"

@@ -35,8 +35,8 @@ def _now_iso() -> str:
 
 
 def _fs_safe_timestamp() -> str:
-    """Return a filesystem-safe UTC timestamp (e.g. ``20260508T004500Z``)."""
-    return datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    """Return a filesystem-safe UTC timestamp with microsecond precision (e.g. ``20260508T004500_123456Z``)."""
+    return datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
 
 
 def _slugify_path(path: str) -> str:
