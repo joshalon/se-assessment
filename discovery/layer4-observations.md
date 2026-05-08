@@ -96,3 +96,149 @@ multiples), whereas RSA-2048 ciphertext is exactly 256 bytes.
 Working hypothesis for Layer 4: each record is a single RSA-2048 ciphertext
 block, possibly OAEP-padded, encrypting a session key or a 256-byte plaintext.
 This will be retested as more layers expose decryption material.
+
+## Layer 2 plaintext observations
+
+> Captured: 2026-05-08T04:30Z (post v2 sweep)
+> Status: **STILL NO PLAINTEXT - v2 exhaustive sweep produced 0 hits across 9,450 attempts**
+
+### Position-stratified ciphertext structure
+
+Across the 500 ciphertexts, all four cut-points (first 4 / 8 / 12 / 16 bytes,
+and last 4 / 8 / 12 / 16 bytes) yield 500 distinct values - i.e. byte-level
+uniqueness is saturated within the leading 4 bytes and the trailing 4 bytes.
+This is consistent with both:
+
+- a fully encrypted 256-byte record (no fixed plaintext fields visible at the
+  edges), and
+- a layout in which the nonce - if any - is record-specific and uniformly
+  random (rather than a counter or shared value).
+
+### Negative results (rule-outs from v2 sweep)
+
+L6 (`u32_be length || nonce || ct || tag || padding`) is **ruled out**: zero
+of 500 records have a plausible u32 big-endian or little-endian length prefix
+(any value in the AES-GCM body-length range 4..230). Length-prefix interpreted
+values span the full u32 range with random magnitude.
+
+L4 with simple counter strategies is **plausibility-low**: only 2 of 500
+records have `ct[0] == record_index & 0xFF` (expected ~2 for uniform random),
+i.e. no visible little-endian counter at offset 0. All four nonce strategies
+were swept anyway.
+
+### What v2 ruled out
+
+Under the matrix `(IKM in {utf8, b64url_decoded, after-prefix utf8/b64url/hex})
+* (salt in {empty, "se-assessment", "se-assessment-api", host, "dataset"})
+* (info in {empty, "dataset", "records", "record-encryption",
+"se-assessment-records", "aes-gcm", "encryption-key"}) * (length in {32, 16})
+* (layout in {L1, L2, L3, L4 with 4 nonce strategies, L5, L6}) * (AAD in
+{none, idx2_be, idx4_be})`, **no AES-GCM tag validated for record 0**.
+
+This is meaningful: with 9,450 trials and per-trial false-positive probability
+`2^-64`, the expected number of spurious hits is ~5e-16, so a clean miss is
+statistically certain. Either the ciphertext is not AES-GCM at all, or the
+HKDF parameters lie outside the matrix tested.
+
+### Working hypothesis after v2
+
+The fixed 256-byte length still matches RSA-2048 exactly. Without a delivered
+RSA private key, RSA hybrid cannot be tested offline. The remaining
+authorizable next steps (per the v2 report) are: extend HKDF salt/info to
+include observed wire-side values (per-batch ETags, request_ids), swap AEAD
+to ChaCha20-Poly1305, or read one of the markdown sub-challenge briefs to
+check for an explicit parameter spec. None has been done yet - awaiting
+orchestrator decision.
+
+## Layer 2 plaintext observations -- v3 update
+
+> Captured: 2026-05-08T04:31Z (post v3 extended sweep)
+> Status: **STILL NO PLAINTEXT - v3 extended sweep produced 0 hits across an
+> additional 18,465 attempts; aggregate v2+v3 = 0 of 27,915 attempts**
+
+### What v3 added
+
+- ETag-derived material: 6 ETags total (5 per-batch tied to ranges 0-99,
+  100-199, 200-299, 300-399, 400-499, plus the dataset-wide paginated ETag
+  `bf08...`), each tried as raw 32-byte keys, as HKDF salts, and as HKDF IKMs.
+- Per-batch keying: records 0-99 keyed under batch[0]'s ETag, etc. Gated on
+  `{0, 99, 100, 199, 200, 299, 300, 399, 400, 499}`.
+- Per-record HKDF info: `record-{i}` and 2-byte big-endian record index.
+- ChaCha20-Poly1305 cipher swap across the entire matrix (with key length
+  fixed at 32 bytes).
+- Direct-key paths (no HKDF): 8 candidate 32-byte keys, all tested under L1
+  + L4 with both AEAD ciphers and 3 AAD options.
+
+### Negative results from v3
+
+The 256-byte ciphertext records are **not** decryptable under any of the
+following, for layouts L1 (explicit 12-byte nonce prefix) or L4 (implicit
+record-index-derived nonce):
+
+1. AES-GCM keyed with any of the 6 ETag bytes directly.
+2. AES-GCM keyed with `API_KEY` truncated/padded to 32 bytes.
+3. AES-GCM keyed with the 32-byte hex tail of `API_KEY` after the `sa_` prefix.
+4. AES-GCM keyed via `HKDF(API_KEY, salt=<any of 15 v3-extended salts>,
+   info=<any of 7 v2 + 4 v3 info values>, length in {32,16})`.
+5. AES-GCM under per-batch keying (ETag-as-salt or ETag-as-IKM, in both
+   bytes and hex-utf8 forms).
+6. AES-GCM under per-record HKDF info derivation (`record-{i}` or
+   `i.to_bytes(2,'big')`).
+7. All of (1)-(6) with ChaCha20-Poly1305 swapped in for AES-GCM.
+8. All of (1)-(7) under each of `{none, idx2_be, idx4_be}` as AAD.
+
+### Strengthened hypotheses
+
+The fixed 256-byte record length is now a much louder signal that the cipher
+is **RSA-2048**, not an AEAD with deliberately-padded fixed-length output.
+The narrative breadcrumb in the OPTIONS catalog ("AES-GCM + HKDF") may refer
+to a different sub-system (e.g. a transport-layer or audit-trail signing
+path) and not to the dataset record encryption.
+
+The remaining authorizable paths (in priority order):
+
+1. Read the design-challenge markdown brief (1 wire call) to check for an
+   explicit dataset-encryption parameter spec.
+2. Test AES-CTR + HMAC-SHA256 (encrypt-then-MAC) as an alternative to AEAD;
+   same matrix applies but verify step is HMAC-compare. ~10 minutes offline.
+3. Search for an RSA private-key delivery endpoint (`/key`, `/secret`,
+   `/private`, etc.); requires wire-call authorization.
+
+---
+
+## v4 update -- AES-CTR + HMAC-SHA256 ruled out
+
+The encrypt-then-MAC alternative listed as path (2) above has now been
+exercised offline. `assessment/layer2.py` `search_ctr_hmac(...)` ran 3,488
+HKDF + AES-CTR + HMAC-SHA256 attempts across:
+
+- 4 layouts (LE1/LE2/LE3/LE4 with iv-len in {16,12,8} and mac-len in {16,32})
+- 4 MAC scopes (`iv||ct`, `ct`, with optional 4-byte or 2-byte BE positional
+  binding)
+- 2 derivation modes (HKDF length-64 split into enc||mac; or two separate
+  HKDF derivations with `info+"-enc"` and `info+"-mac"`)
+- IKM/salt/info combinations parallel to the v3 ETag-extended matrix
+- Per-batch keying with ETag-as-salt and ETag-as-IKM variants
+
+Result: zero records MAC-validated. Combined with v2 (27,915 AEAD attempts)
+and v3 (extended AEAD), this closes the symmetric-key-from-API_KEY-or-ETag
+hypothesis space tractable offline.
+
+### Net narrowed hypothesis set
+
+The dataset record encryption is **not** any of:
+
+- AES-GCM keyed via HKDF over (API_KEY, ETag, paginated-ETag) with the
+  v2/v3 salt/info matrix
+- ChaCha20-Poly1305 under the same matrix
+- Per-batch keying with batch ETag as salt or IKM
+- Per-record `info` HKDF derivation
+- AES-CTR + HMAC-SHA256 (encrypt-then-MAC) under the v4 matrix above,
+  including split-derivation and separate-derivation modes
+
+### Strengthened recommendation
+
+Path (1) (read the design-challenge brief, 1 wire call) is now the cheapest
+remaining lead. Path (3) (search for a key-delivery endpoint) is the
+fallback if (1) yields no parameter spec. Continued offline cipher sweeping
+is unlikely to be productive without new wire-side material.
