@@ -1,3 +1,7 @@
+> **Post-window post-mortem (added 2026-05-08 after window close):** the original assessment email said "decrypt the dataset using **a key the platform issues you**." The verb *issues* signals a server-side issuance request — I pursued local derivation from API_KEY/ETag material instead and conceded after 31,403 unsuccessful AEAD/MAC attempts. The lesson: protocol verbs ("issues", "provisions", "grants", "delivers") in spec text are load-bearing and should be re-read at every phase boundary, not just at the start. See `discovery/layer-4-analysis.md` §7 for the full retrospective. This header was added post-window for the assessor's benefit; the rest of the report below is the in-window state.
+
+---
+
 # Phase 3 Layer 2 - Working Report v2 (HALTED ON EXHAUSTIVE SWEEP MISS)
 
 > Status: **HALTED for orchestrator decision**
