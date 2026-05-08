@@ -1,0 +1,8 @@
+{
+  "status": "ok",
+  "data": {
+    "id": "abc-123",
+    "name": "fixture",
+    "items": [1, 2, 3]
+  }
+}
